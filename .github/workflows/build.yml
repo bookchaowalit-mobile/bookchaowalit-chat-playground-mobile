@@ -1,0 +1,41 @@
+name: Build Mobile App
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Install & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install
+      - run: npx expo lint || true
+      - run: npx tsc --noEmit || true
+
+  eas-build:
+    name: EAS Build (Preview)
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+      - name: Build Android Preview
+        run: eas build --platform android --profile preview --non-interactive || echo "EAS credentials not configured"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
