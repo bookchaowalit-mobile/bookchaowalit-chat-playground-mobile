@@ -49,3 +49,14 @@ Score: 7/10 (was 6/10) — conversation and system prompt survive restarts; stil
 - Accessibility: Transcript toggle and Clear have labels and disabled state; profile links get link roles.
 - Advisories: `overrides.postcss ^8.5.28` clears the high-severity PostCSS advisory in Expo metro-config (minor bump). Remaining `image-size` (metro, bundler-only), `uuid` (via `xcode`) and `decode-uri-component` (via `query-string@7`) need an Expo SDK major upgrade; deliberately not auto-fixed.
 - Verified: typecheck, lint, 17 vitest tests, Android `expo export` bundle.
+
+## Done in this pass (pass 3)
+
+Score: 7.5/10 (was 7/10) — edge-case hunt in `lib/chat.ts`.
+
+- Bug: the Thai greeting "สวัสดี" never matched — `\b` is ASCII-only and there is no word boundary after Thai letters. Replaced with a Unicode lookahead.
+- Bug: `/reverse` reversed code points, detaching combining accents and Thai vowel/tone marks and splitting ZWJ/skin-tone emoji and flags. New hand-written `graphemes()` (Hermes has no `Intl.Segmenter`) keeps user-perceived characters whole; `/count` counts them too.
+- Bug: commands only split on a plain space, so "/upper<TAB>hi" was echoed instead of run.
+- "1 word(s)" / "token(s)" → proper plurals.
+- Backlog (P2): `estimateTokens` (~4 chars/token) badly underestimates Thai text.
+- Verified: typecheck, lint, 21 vitest tests, Android `expo export` (Hermes bytecode compiled with the Unicode regexes).

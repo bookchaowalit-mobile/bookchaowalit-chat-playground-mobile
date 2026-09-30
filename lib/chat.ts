@@ -36,31 +36,70 @@ export function trimToBudget(messages: Message[], budget: number): Message[] {
   return [...system, ...kept];
 }
 
+// Code points that attach to the previous user-perceived character: combining
+// marks (incl. Thai vowel/tone marks), Thai/Lao SARA AM, variation selectors,
+// emoji skin tones and tag characters.
+const EXTEND = /[\p{M}\u0E33\u0EB3\u200C\uFE00-\uFE0F\u{1F3FB}-\u{1F3FF}\u{E0020}-\u{E007F}]/u;
+const REGIONAL = /^[\u{1F1E6}-\u{1F1FF}]$/u;
+
+/**
+ * Split text into user-perceived characters (a pragmatic subset of UAX #29
+ * that covers combining marks, Thai, ZWJ emoji, skin tones, flags and CRLF).
+ * Implemented by hand so Hermes (no Intl.Segmenter) behaves like the web.
+ */
+export function graphemes(text: string): string[] {
+  const out: string[] = [];
+  for (const c of text) {
+    const i = out.length - 1;
+    if (i >= 0) {
+      const prev = out[i];
+      const prevCps = Array.from(prev);
+      if (
+        EXTEND.test(c) ||
+        c === "\u200D" ||
+        prev.endsWith("\u200D") ||
+        (c === "\n" && prev === "\r") ||
+        (REGIONAL.test(c) && prevCps.length === 1 && REGIONAL.test(prev))
+      ) {
+        out[i] = prev + c;
+        continue;
+      }
+    }
+    out.push(c);
+  }
+  return out;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 /** Deterministic rule-based reply so the playground works fully offline. */
 export function mockReply(input: string, systemPrompt = ""): string {
   const text = input.trim();
   const lower = text.toLowerCase();
-  const persona = systemPrompt.trim() ? ` (persona: ${systemPrompt.trim().slice(0, 40)})` : "";
+  const persona = systemPrompt.trim() ? ` (persona: ${graphemes(systemPrompt.trim()).slice(0, 40).join("")})` : "";
   if (!text) return "Say something and I will reply.";
-  if (/^(hi|hello|hey|sawasdee|สวัสดี)\b/i.test(text)) return `Hello! I'm the offline playground assistant${persona}. Try "/help".`;
+  // \b is ASCII-only, so it never matched after the Thai greeting; use an
+  // explicit "end, space or punctuation" lookahead instead.
+  if (/^(hi|hello|hey|sawasdee|สวัสดี)(?=$|[\s\p{P}])/iu.test(text)) return `Hello! I'm the offline playground assistant${persona}. Try "/help".`;
   if (lower === "/help") {
     return "Commands: /reverse <text>, /count <text>, /upper <text>, /tokens <text>. Anything else is echoed back with stats.";
   }
-  const [cmd, ...rest] = text.split(" ");
-  const arg = rest.join(" ");
+  // Split on the first run of any whitespace (tab/newline too, not just " ").
+  const [, cmd, arg] = /^(\S+)\s*([\s\S]*)$/.exec(text) ?? ["", text, ""];
   switch (cmd.toLowerCase()) {
     case "/reverse":
-      return [...arg].reverse().join("");
+      // Reverse whole characters so accents, Thai marks and emoji stay intact.
+      return graphemes(arg).reverse().join("");
     case "/upper":
       return arg.toUpperCase();
     case "/count": {
       const words = arg.trim() ? arg.trim().split(/\s+/).length : 0;
-      return `${words} word(s), ${[...arg].length} character(s).`;
+      return `${plural(words, "word", "words")}, ${plural(graphemes(arg).length, "character", "characters")}.`;
     }
     case "/tokens":
-      return `≈${estimateTokens(arg)} token(s).`;
+      return `≈${plural(estimateTokens(arg), "token", "tokens")}.`;
   }
-  if (text.endsWith("?")) return `Good question${persona}. This offline mock can't look things up, but your question has ${estimateTokens(text)} token(s).`;
+  if (text.endsWith("?")) return `Good question${persona}. This offline mock can't look things up, but your question has ${plural(estimateTokens(text), "token", "tokens")}.`;
   return `You said: "${text}"${persona}`;
 }
 
