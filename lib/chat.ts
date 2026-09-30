@@ -73,3 +73,19 @@ export function makeMessage(role: Role, content: string): Message {
   counter += 1;
   return { id: `${Date.now().toString(36)}-${counter}`, role, content };
 }
+
+/** Keep the stored conversation bounded: only the most recent messages survive. */
+export const MAX_STORED_MESSAGES = 200;
+
+export function recentMessages(messages: Message[], max = MAX_STORED_MESSAGES): Message[] {
+  return messages.length > max ? messages.slice(-max) : messages;
+}
+
+const ROLES: Role[] = ["system", "user", "assistant"];
+
+/** Type guard used when loading the conversation from local storage. */
+export function isMessage(value: unknown): value is Message {
+  if (typeof value !== "object" || value === null) return false;
+  const m = value as Record<string, unknown>;
+  return typeof m.id === "string" && ROLES.includes(m.role as Role) && typeof m.content === "string";
+}

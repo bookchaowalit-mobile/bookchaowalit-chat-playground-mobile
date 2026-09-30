@@ -1,12 +1,26 @@
 import { useRef, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { conversationStats, estimateTokens, formatTranscript, makeMessage, mockReply, type Message } from "../../lib/chat";
+import {
+  conversationStats,
+  estimateTokens,
+  formatTranscript,
+  isMessage,
+  makeMessage,
+  mockReply,
+  recentMessages,
+  type Message,
+} from "../../lib/chat";
+import { listCodec, valueCodec } from "../../lib/persist";
+import { usePersistentState } from "../../lib/usePersistentState";
+
+const messagesCodec = listCodec(isMessage);
+const textCodec = valueCodec((v: unknown): v is string => typeof v === "string");
 
 export default function PlaygroundScreen() {
-  const [system, setSystem] = useState("");
+  const [system, setSystem] = usePersistentState("playground.system.v1", "", textCodec);
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = usePersistentState<Message[]>("playground.messages.v1", [], messagesCodec);
   const [showTranscript, setShowTranscript] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
 
@@ -16,7 +30,9 @@ export default function PlaygroundScreen() {
   const send = () => {
     const text = draft.trim();
     if (!text) return;
-    setMessages((prev) => [...prev, makeMessage("user", text), makeMessage("assistant", mockReply(text, system))]);
+    setMessages((prev) =>
+      recentMessages([...prev, makeMessage("user", text), makeMessage("assistant", mockReply(text, system))]),
+    );
     setDraft("");
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
   };
@@ -35,10 +51,21 @@ export default function PlaygroundScreen() {
           <Text style={styles.stats} accessibilityLiveRegion="polite">
             {stats.user} user · {stats.assistant} assistant · ≈{stats.tokens} tokens
           </Text>
-          <Pressable onPress={() => setShowTranscript(!showTranscript)} accessibilityRole="button">
+          <Pressable
+            onPress={() => setShowTranscript(!showTranscript)}
+            accessibilityRole="button"
+            accessibilityLabel={showTranscript ? "Show chat view" : "Show plain-text transcript"}
+          >
             <Text style={styles.link}>{showTranscript ? "Chat" : "Transcript"}</Text>
           </Pressable>
-          <Pressable onPress={() => setMessages([])} accessibilityRole="button" disabled={messages.length === 0}>
+          <Pressable
+            onPress={() => setMessages([])}
+            accessibilityRole="button"
+            accessibilityLabel="Clear conversation"
+            accessibilityState={{ disabled: messages.length === 0 }}
+            disabled={messages.length === 0}
+          >
+
             <Text style={[styles.link, messages.length === 0 && styles.disabled]}>Clear</Text>
           </Pressable>
         </View>
