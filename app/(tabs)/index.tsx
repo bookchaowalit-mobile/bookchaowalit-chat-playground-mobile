@@ -1,125 +1,128 @@
-import { StyleSheet, Text, View, ScrollView, Pressable } from "react-native";
+import { useRef, useState } from "react";
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { conversationStats, estimateTokens, formatTranscript, makeMessage, mockReply, type Message } from "../../lib/chat";
 
-export default function HomeScreen() {
+export default function PlaygroundScreen() {
+  const [system, setSystem] = useState("");
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const listRef = useRef<FlatList<Message>>(null);
+
+  const all = system.trim() ? [makeSystem(system), ...messages] : messages;
+  const stats = conversationStats(all);
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setMessages((prev) => [...prev, makeMessage("user", text), makeMessage("assistant", mockReply(text, system))]);
+    setDraft("");
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Chat Playground</Text>
-        <Text style={styles.subtitle}>Chat Playground — Mobile app (expo)</Text>
-      </View>
-
-      <View style={styles.cardGrid}>
-        <FeatureCard
-          icon="rocket"
-          title="Getting Started"
-          description="Welcome to the mobile version. Start building your experience."
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
+      <View style={styles.top}>
+        <TextInput
+          style={styles.system}
+          placeholder="System prompt / persona (optional)"
+          value={system}
+          onChangeText={setSystem}
+          accessibilityLabel="System prompt"
         />
-        <FeatureCard
-          icon="code"
-          title="Tech Stack"
-          description="Built with Expo, React Native, and TypeScript."
-        />
-        <FeatureCard
-          icon="phone-portrait"
-          title="Cross-Platform"
-          description="Runs on iOS, Android, and Web from a single codebase."
-        />
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Part of Chaowalit Greepoke's 101 Portfolio Projects
-        </Text>
-        <Link href="https://bookchaowalit.com" asChild>
-          <Pressable>
-            <Text style={styles.link}>bookchaowalit.com</Text>
+        <View style={styles.statsRow}>
+          <Text style={styles.stats} accessibilityLiveRegion="polite">
+            {stats.user} user · {stats.assistant} assistant · ≈{stats.tokens} tokens
+          </Text>
+          <Pressable onPress={() => setShowTranscript(!showTranscript)} accessibilityRole="button">
+            <Text style={styles.link}>{showTranscript ? "Chat" : "Transcript"}</Text>
           </Pressable>
-        </Link>
+          <Pressable onPress={() => setMessages([])} accessibilityRole="button" disabled={messages.length === 0}>
+            <Text style={[styles.link, messages.length === 0 && styles.disabled]}>Clear</Text>
+          </Pressable>
+        </View>
       </View>
-    </ScrollView>
+
+      {showTranscript ? (
+        <View style={styles.transcript}>
+          <Text selectable style={styles.transcriptText}>
+            {formatTranscript(all) || "Nothing yet."}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          ref={listRef}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          data={messages}
+          keyExtractor={(m) => m.id}
+          ListEmptyComponent={
+            <Text style={styles.empty}>
+              Offline playground: replies come from a local mock assistant. Try “hello” or “/help”.
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <View style={[styles.bubble, item.role === "user" ? styles.user : styles.assistant]}>
+              <Text selectable style={item.role === "user" ? styles.userText : styles.assistantText}>
+                {item.content}
+              </Text>
+            </View>
+          )}
+        />
+      )}
+
+      <View style={styles.composer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Message"
+          value={draft}
+          onChangeText={setDraft}
+          onSubmitEditing={send}
+          returnKeyType="send"
+          multiline
+          accessibilityLabel="Message"
+        />
+        <Text style={styles.draftTokens}>≈{estimateTokens(draft)}</Text>
+        <Pressable
+          style={[styles.send, !draft.trim() && styles.sendDisabled]}
+          onPress={send}
+          disabled={!draft.trim()}
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+        >
+          <Ionicons name="send" size={20} color="#fff" />
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  description: string;
-}) {
-  return (
-    <View style={styles.card}>
-      <Ionicons name={icon} size={28} color="#4A90D9" />
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardDescription}>{description}</Text>
-    </View>
-  );
+function makeSystem(content: string): Message {
+  return { id: "system", role: "system", content: content.trim() };
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F5F5",
-  },
-  header: {
-    backgroundColor: "#4A90D9",
-    padding: 24,
-    paddingTop: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.85)",
-    lineHeight: 20,
-  },
-  cardGrid: {
-    padding: 16,
-    gap: 12,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    alignItems: "center",
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-  },
-  cardDescription: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  footer: {
-    padding: 24,
-    alignItems: "center",
-    gap: 8,
-  },
-  footerText: {
-    fontSize: 12,
-    color: "#999",
-  },
-  link: {
-    fontSize: 14,
-    color: "#4A90D9",
-    fontWeight: "500",
-  },
+  container: { flex: 1, backgroundColor: "#F5F5F5" },
+  top: { padding: 12, gap: 6, borderBottomWidth: 1, borderBottomColor: "#e5e5e5", backgroundColor: "#fff" },
+  system: { borderWidth: 1, borderColor: "#ccc", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14 },
+  statsRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  stats: { flex: 1, fontSize: 12, color: "#777" },
+  link: { color: "#4A90D9", fontWeight: "600" },
+  disabled: { color: "#aaa" },
+  list: { flex: 1 },
+  listContent: { padding: 12, gap: 8 },
+  empty: { textAlign: "center", color: "#888", marginTop: 32, paddingHorizontal: 24 },
+  bubble: { maxWidth: "85%", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
+  user: { alignSelf: "flex-end", backgroundColor: "#4A90D9" },
+  assistant: { alignSelf: "flex-start", backgroundColor: "#fff", borderWidth: 1, borderColor: "#e5e5e5" },
+  userText: { color: "#fff", fontSize: 15 },
+  assistantText: { color: "#222", fontSize: 15 },
+  transcript: { flex: 1, padding: 12 },
+  transcriptText: { fontFamily: "monospace", fontSize: 13, color: "#333" },
+  composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, padding: 10, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#e5e5e5" },
+  input: { flex: 1, maxHeight: 120, borderWidth: 1, borderColor: "#ccc", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8, fontSize: 15 },
+  draftTokens: { fontSize: 11, color: "#999", paddingBottom: 10 },
+  send: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#4A90D9", alignItems: "center", justifyContent: "center" },
+  sendDisabled: { backgroundColor: "#A9C4E6" },
 });
