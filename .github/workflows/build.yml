@@ -7,33 +7,43 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Install & Lint
+  validate:
+    name: Lint, Typecheck, Test & Export
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install || true
-      - run: npx expo lint || true
-      - run: npx tsc --noEmit || true
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Bundle Android JS (smoke build)
+        run: npx expo export --platform android --output-dir dist
 
   eas-build:
-    name: EAS Build (Preview)
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Owner-triggered EAS Preview APK
+    needs: validate
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install || true
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
+          cache: npm
+      - run: npm ci
       - name: Build Android Preview
-        run: eas build --platform android --profile preview --non-interactive || echo "EAS credentials not configured"
+        run: npx --yes eas-cli@16.19.3 build --platform android --profile preview --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

@@ -24,6 +24,8 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Links</Text>
         <Pressable
+          accessibilityLabel="Open bookchaowalit.com"
+          accessibilityRole="link"
           style={styles.linkRow}
           onPress={() => Linking.openURL("https://bookchaowalit.com")}
         >
@@ -31,6 +33,8 @@ export default function ProfileScreen() {
           <Text style={styles.linkText}>bookchaowalit.com</Text>
         </Pressable>
         <Pressable
+          accessibilityLabel="Open github.com/bookchaowalit"
+          accessibilityRole="link"
           style={styles.linkRow}
           onPress={() => Linking.openURL("https://github.com/bookchaowalit")}
         >
